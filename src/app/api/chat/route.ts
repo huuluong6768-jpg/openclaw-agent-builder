@@ -48,26 +48,83 @@ type ChatMessageInput = {
   content: string;
 };
 
+type ProviderPayload = {
+  type?: "gateway" | "openai" | "anthropic" | "custom";
+  customBaseUrl?: string;
+  customApiKey?: string;
+  customModel?: string;
+  openaiApiKey?: string;
+  openaiModel?: string;
+  anthropicApiKey?: string;
+  anthropicModel?: string;
+};
+
 export async function POST(request: NextRequest) {
   try {
-    const { messages, gatewayUrl, gatewayToken, provider } = (await request.json()) as {
+    const body = await request.json();
+    const {
+      messages,
+      gatewayUrl,
+      gatewayToken,
+      provider: providerConfig,
+    } = body as {
       messages: ChatMessageInput[];
       gatewayUrl?: string;
       gatewayToken?: string;
-      provider?: "gateway" | "openai" | "anthropic";
+      provider?: ProviderPayload;
     };
 
     if (!messages?.length) {
       return Response.json({ error: "No messages provided" }, { status: 400 });
     }
 
+    const providerType = providerConfig?.type ?? (body.provider as string) ?? "gateway";
+
     const fullMessages: ChatMessageInput[] = [
       { role: "system", content: SYSTEM_PROMPT },
       ...messages,
     ];
 
-    // Try OpenClaw gateway first (uses the user's running server)
-    if (provider !== "openai" && provider !== "anthropic" && gatewayUrl && gatewayToken) {
+    // 1. Custom OpenAI-compatible provider
+    if (providerType === "custom" && providerConfig?.customBaseUrl && providerConfig?.customApiKey) {
+      const result = await callOpenAICompatible(
+        providerConfig.customBaseUrl,
+        providerConfig.customApiKey,
+        providerConfig.customModel || "gpt-4o-mini",
+        fullMessages,
+      );
+      if (result) return Response.json(result);
+    }
+
+    // 2. Direct OpenAI
+    if (providerType === "openai") {
+      const apiKey = providerConfig?.openaiApiKey || process.env.OPENAI_API_KEY;
+      const model = providerConfig?.openaiModel || "gpt-4o-mini";
+      if (apiKey) {
+        const result = await callOpenAICompatible(
+          "https://api.openai.com/v1",
+          apiKey,
+          model,
+          fullMessages,
+        );
+        if (result) return Response.json(result);
+      }
+      return Response.json({ error: "OpenAI API key not configured" }, { status: 400 });
+    }
+
+    // 3. Direct Anthropic
+    if (providerType === "anthropic") {
+      const apiKey = providerConfig?.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+      const model = providerConfig?.anthropicModel || "claude-sonnet-4-20250514";
+      if (apiKey) {
+        const result = await callAnthropic(apiKey, model, messages);
+        if (result) return Response.json(result);
+      }
+      return Response.json({ error: "Anthropic API key not configured" }, { status: 400 });
+    }
+
+    // 4. OpenClaw Gateway (default)
+    if (gatewayUrl && gatewayToken) {
       try {
         const httpUrl = gatewayUrl
           .replace("ws://", "http://")
@@ -92,66 +149,106 @@ export async function POST(request: NextRequest) {
           return Response.json({ content, agentConfig });
         }
       } catch {
-        // Fall through to direct API
+        // Fall through to fallbacks
       }
     }
 
-    // Fallback: Use OpenAI API directly if API key is available
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (openaiKey) {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: fullMessages,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const content = data.choices?.[0]?.message?.content ?? "";
-        const agentConfig = extractAgentConfig(content);
-        return Response.json({ content, agentConfig });
-      }
+    // 5. Fallback: try env-based OpenAI
+    const envOpenaiKey = process.env.OPENAI_API_KEY;
+    if (envOpenaiKey) {
+      const result = await callOpenAICompatible(
+        "https://api.openai.com/v1",
+        envOpenaiKey,
+        "gpt-4o-mini",
+        fullMessages,
+      );
+      if (result) return Response.json(result);
     }
 
-    // Fallback: Use Anthropic API directly if API key is available
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    if (anthropicKey) {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2048,
-          system: SYSTEM_PROMPT,
-          messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const content = data.content?.[0]?.text ?? "";
-        const agentConfig = extractAgentConfig(content);
-        return Response.json({ content, agentConfig });
-      }
+    // 6. Fallback: try env-based Anthropic
+    const envAnthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (envAnthropicKey) {
+      const result = await callAnthropic(envAnthropicKey, "claude-sonnet-4-20250514", messages);
+      if (result) return Response.json(result);
     }
 
-    // Last fallback: smart local response
+    // 7. Last fallback: smart local response
     const lastMessage = messages[messages.length - 1].content;
     const localResponse = generateLocalResponse(lastMessage);
     return Response.json(localResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Chat error";
     return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+async function callOpenAICompatible(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: ChatMessageInput[],
+): Promise<{ content: string; agentConfig: Record<string, unknown> | null } | null> {
+  try {
+    const url = baseUrl.replace(/\/+$/, "");
+    const endpoint = url.endsWith("/chat/completions")
+      ? url
+      : `${url}/chat/completions`;
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model, messages }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content ?? "";
+      const agentConfig = extractAgentConfig(content);
+      return { content, agentConfig };
+    }
+
+    const errorData = await res.text();
+    return { content: `API error (${res.status}): ${errorData}`, agentConfig: null };
+  } catch (err) {
+    return { content: `Connection error: ${err instanceof Error ? err.message : "Unknown error"}`, agentConfig: null };
+  }
+}
+
+async function callAnthropic(
+  apiKey: string,
+  model: string,
+  messages: ChatMessageInput[],
+): Promise<{ content: string; agentConfig: Record<string, unknown> | null } | null> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const content = data.content?.[0]?.text ?? "";
+      const agentConfig = extractAgentConfig(content);
+      return { content, agentConfig };
+    }
+
+    const errorData = await res.text();
+    return { content: `Anthropic API error (${res.status}): ${errorData}`, agentConfig: null };
+  } catch (err) {
+    return { content: `Connection error: ${err instanceof Error ? err.message : "Unknown error"}`, agentConfig: null };
   }
 }
 

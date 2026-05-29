@@ -14,6 +14,22 @@ export type ChatMessage = {
   actions?: { label: string; action: string }[];
 };
 
+export type ProviderType = "gateway" | "openai" | "anthropic" | "custom";
+
+export type ProviderConfig = {
+  type: ProviderType;
+  // Custom / OpenAI-compatible provider
+  customBaseUrl: string;
+  customApiKey: string;
+  customModel: string;
+  // Direct OpenAI
+  openaiApiKey: string;
+  openaiModel: string;
+  // Direct Anthropic
+  anthropicApiKey: string;
+  anthropicModel: string;
+};
+
 type AppState = {
   // Connection
   gatewayUrl: string;
@@ -21,6 +37,10 @@ type AppState = {
   isConnected: boolean;
   setConnection: (url: string, token: string) => void;
   setConnected: (v: boolean) => void;
+
+  // Provider config
+  providerConfig: ProviderConfig;
+  setProviderConfig: (config: Partial<ProviderConfig>) => void;
 
   // Theme
   sidebarCollapsed: boolean;
@@ -44,6 +64,17 @@ type AppState = {
   setSelectedAgentId: (id: string | null) => void;
 };
 
+const defaultProviderConfig: ProviderConfig = {
+  type: "gateway",
+  customBaseUrl: "",
+  customApiKey: "",
+  customModel: "",
+  openaiApiKey: "",
+  openaiModel: "gpt-4o-mini",
+  anthropicApiKey: "",
+  anthropicModel: "claude-sonnet-4-20250514",
+};
+
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
@@ -52,6 +83,10 @@ export const useAppStore = create<AppState>()(
       isConnected: false,
       setConnection: (url, token) => set({ gatewayUrl: url, gatewayToken: token }),
       setConnected: (v) => set({ isConnected: v }),
+
+      providerConfig: defaultProviderConfig,
+      setProviderConfig: (config) =>
+        set((s) => ({ providerConfig: { ...s.providerConfig, ...config } })),
 
       sidebarCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -75,6 +110,7 @@ export const useAppStore = create<AppState>()(
         gatewayUrl: state.gatewayUrl,
         gatewayToken: state.gatewayToken,
         sidebarCollapsed: state.sidebarCollapsed,
+        providerConfig: state.providerConfig,
       }),
     },
   ),

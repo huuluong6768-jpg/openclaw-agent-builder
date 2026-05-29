@@ -31,6 +31,7 @@ export default function ChatPage() {
     isConnected,
     gatewayUrl,
     gatewayToken,
+    providerConfig,
     setAgents,
   } = useAppStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,6 +66,7 @@ export default function ChatPage() {
           messages: chatHistory,
           gatewayUrl,
           gatewayToken,
+          provider: providerConfig,
         }),
       });
 
