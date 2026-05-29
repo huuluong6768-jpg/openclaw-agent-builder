@@ -2,14 +2,14 @@
 
 import { useState, use } from "react";
 import Link from "next/link";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Share2, Copy, Check, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const tabs = ["Overview", "Knowledge", "Config", "Chat"] as const;
+const tabs = ["Overview", "Knowledge", "Config", "Integration", "Chat"] as const;
 
 type WorkspaceFile = { name: string; content: string };
 
@@ -270,6 +270,10 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
+      {activeTab === "Integration" && (
+        <IntegrationTab agentId={id} agentName={name} />
+      )}
+
       {activeTab === "Chat" && (
         <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -277,6 +281,83 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function IntegrationTab({ agentId, agentName }: { agentId: string; agentName: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const shareLink = `${baseUrl}/chat/${agentId}`;
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const embedCode = `<script>\n  window.OpenClawEmbed = {\n    agentId: "${agentId}",\n    baseUrl: "${baseUrl}",\n    position: "bottom-right",\n    theme: "light"\n  };\n</script>\n<script src="${baseUrl}/embed.js" defer></script>`;
+
+  return (
+    <div className="space-y-6">
+      {/* Share Link */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <Share2 className="h-4 w-4 text-blue-500" />
+          Share Link
+        </h3>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Share this URL to let anyone chat with {agentName}
+        </p>
+        <div className="flex gap-2">
+          <Input value={shareLink} readOnly className="font-mono text-xs" />
+          <Button variant="outline" size="sm" onClick={() => copyToClipboard(shareLink, "share")}>
+            {copied === "share" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+          </Button>
+          <a href={shareLink} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm"><ExternalLink className="h-4 w-4" /></Button>
+          </a>
+        </div>
+      </section>
+
+      {/* Embed Widget */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Embed Widget</h3>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Add a chat widget to any website
+        </p>
+        <div className="relative">
+          <pre className="rounded-lg bg-gray-900 p-4 text-xs font-mono text-gray-300 overflow-x-auto">{embedCode}</pre>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="absolute top-2 right-2"
+            onClick={() => copyToClipboard(embedCode, "embed")}
+          >
+            {copied === "embed" ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+          </Button>
+        </div>
+      </section>
+
+      {/* API Example */}
+      <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">API Access</h3>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Send messages to this agent via API
+        </p>
+        <pre className="rounded-lg bg-gray-900 p-4 text-xs font-mono text-green-400 overflow-x-auto">
+{`curl -X POST ${baseUrl}/api/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{"messages": [{"role": "user", "content": "Hello!"}], "agentId": "${agentId}"}'`}
+        </pre>
+      </section>
+
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
+        <p className="text-sm text-blue-800 dark:text-blue-300">
+          For full integration options, visit the{" "}
+          <a href="/integrations" className="font-medium underline">Integrations page</a>.
+        </p>
+      </div>
     </div>
   );
 }

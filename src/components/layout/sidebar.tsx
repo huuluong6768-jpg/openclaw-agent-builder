@@ -8,6 +8,7 @@ import {
   BookOpen,
   Puzzle,
   Settings,
+  Share2,
   ChevronLeft,
   ChevronRight,
   Wifi,
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/agents", icon: Bot, label: "Agents" },
   { href: "/knowledge", icon: BookOpen, label: "Knowledge" },
   { href: "/skills", icon: Puzzle, label: "Skills" },
+  { href: "/integrations", icon: Share2, label: "Integrations" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
