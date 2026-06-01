@@ -113,7 +113,7 @@ export class OpenClawClient {
         }
       };
 
-      ws.onerror = (e) => {
+      ws.onerror = () => {
         reject(new Error("WebSocket error"));
       };
 

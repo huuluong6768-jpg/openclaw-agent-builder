@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   Wifi,
   WifiOff,
@@ -64,11 +64,11 @@ export default function SettingsPage() {
   const [defaultThinking, setDefaultThinking] = useState("medium");
   const [defaultWorkspace, setDefaultWorkspace] = useState("~/.openclaw/workspace");
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const handleTestConnection = async () => {
     setTesting(true);

@@ -5,110 +5,243 @@ import { usePathname } from "next/navigation";
 import {
   MessageSquare,
   Bot,
-  BookOpen,
+  LayoutDashboard,
+  FolderKanban,
+  ListChecks,
+  Activity,
+  Brain,
   Puzzle,
   Settings,
-  Share2,
-  ChevronLeft,
+  FileText,
+  Plus,
+  ChevronDown,
   ChevronRight,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 
-const navItems = [
-  { href: "/", icon: MessageSquare, label: "Chat" },
-  { href: "/agents", icon: Bot, label: "Agents" },
-  { href: "/knowledge", icon: BookOpen, label: "Knowledge" },
-  { href: "/skills", icon: Puzzle, label: "Skills" },
-  { href: "/integrations", icon: Share2, label: "Integrations" },
-  { href: "/settings", icon: Settings, label: "Settings" },
-];
+type NavSection = {
+  label: string;
+  advancedOnly?: boolean;
+  items: {
+    href: string;
+    icon: React.ElementType;
+    label: string;
+    badge?: string;
+    advancedOnly?: boolean;
+  }[];
+};
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar, isConnected } = useAppStore();
+  const { sidebarCollapsed, viewMode, setViewMode, agents, isConnected } = useAppStore();
+
+  const sections: NavSection[] = [
+    {
+      label: "Chat",
+      items: [
+        { href: "/chat", icon: MessageSquare, label: "Trò chuyện" },
+      ],
+    },
+    {
+      label: "Control",
+      advancedOnly: true,
+      items: [
+        { href: "/", icon: LayoutDashboard, label: "Tổng quan" },
+        { href: "/monitor", icon: Activity, label: "Giám sát" },
+      ],
+    },
+    {
+      label: "Agent",
+      items: [
+        { href: "/agents", icon: Bot, label: "Nhân viên AI", badge: String(agents.length || 0) },
+        { href: "/projects", icon: FolderKanban, label: "Dự án" },
+        { href: "/tasks", icon: ListChecks, label: "Công việc" },
+        { href: "/skills", icon: Puzzle, label: "Kỹ năng", advancedOnly: true },
+        { href: "/dreaming", icon: Brain, label: "Dreaming", advancedOnly: true },
+      ],
+    },
+    {
+      label: "Settings",
+      advancedOnly: true,
+      items: [
+        { href: "/settings", icon: Settings, label: "Cài đặt" },
+      ],
+    },
+  ];
+
+  const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
+    Chat: true,
+    Control: true,
+    Agent: true,
+    Settings: true,
+  });
+
+  const toggleSection = (label: string) => {
+    setExpandedSections((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
 
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-gray-200 bg-white transition-all duration-200 dark:border-gray-800 dark:bg-gray-950",
-        sidebarCollapsed ? "w-16" : "w-60",
+        "flex flex-col border-r transition-all duration-200 h-screen",
+        "bg-[var(--background)] border-[var(--border)]",
+        sidebarCollapsed ? "w-16" : "w-[var(--shell-nav-width)]",
       )}
     >
-      {/* Logo */}
-      <div className="flex h-14 items-center gap-3 border-b border-gray-200 px-4 dark:border-gray-800">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-bold">
-          AB
+      {/* Brand Header */}
+      <div className="flex h-[var(--shell-topbar)] items-center gap-3 border-b border-[var(--border)] px-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+          </svg>
         </div>
         {!sidebarCollapsed && (
-          <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-            Agent Builder
-          </span>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+              Control
+            </span>
+            <span className="text-sm font-bold text-[var(--text-strong)]">
+              OpenClaw
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 space-y-1 p-2">
-        {navItems.map((item) => {
-          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
+      {/* New Session Button */}
+      {!sidebarCollapsed && (
+        <div className="px-3 pt-3">
+          <Link
+            href="/chat"
+            className="flex items-center justify-center gap-2 w-full rounded-[var(--radius-md)] bg-[var(--accent)] text-white px-4 py-2 text-sm font-medium hover:bg-[var(--accent-hover)] transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Phiên mới
+          </Link>
+        </div>
+      )}
+
+      {/* Mode Toggle */}
+      {!sidebarCollapsed && (
+        <div className="px-3 pt-3">
+          <div className="flex rounded-[var(--radius-md)] bg-[var(--bg-accent)] p-0.5">
+            <button
+              onClick={() => setViewMode("simple")}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",
-                sidebarCollapsed && "justify-center px-2",
+                "flex-1 rounded-[var(--radius-sm)] px-3 py-1.5 text-xs font-medium transition-all cursor-pointer",
+                viewMode === "simple"
+                  ? "bg-[var(--card)] text-[var(--text-strong)] shadow-sm"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]",
               )}
-              title={sidebarCollapsed ? item.label : undefined}
             >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!sidebarCollapsed && <span>{item.label}</span>}
-            </Link>
+              Đơn giản
+            </button>
+            <button
+              onClick={() => setViewMode("advanced")}
+              className={cn(
+                "flex-1 rounded-[var(--radius-sm)] px-3 py-1.5 text-xs font-medium transition-all cursor-pointer",
+                viewMode === "advanced"
+                  ? "bg-[var(--card)] text-[var(--text-strong)] shadow-sm"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]",
+              )}
+            >
+              Đầy đủ
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        {sections.map((section) => {
+          if (section.advancedOnly && viewMode === "simple") return null;
+
+          const visibleItems = section.items.filter(
+            (item) => !item.advancedOnly || viewMode === "advanced",
+          );
+          if (visibleItems.length === 0) return null;
+
+          const isExpanded = expandedSections[section.label] !== false;
+
+          return (
+            <div key={section.label} className="mb-2">
+              {!sidebarCollapsed && (
+                <button
+                  onClick={() => toggleSection(section.label)}
+                  className="flex items-center gap-1 w-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] hover:text-[var(--foreground)] cursor-pointer"
+                >
+                  {section.label}
+                  {isExpanded ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                </button>
+              )}
+              {isExpanded &&
+                visibleItems.map((item) => {
+                  const isActive =
+                    item.href === "/"
+                      ? pathname === "/"
+                      : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-[var(--accent-subtle)] text-[var(--accent)]"
+                          : "text-[var(--muted)] hover:bg-[var(--bg-accent)] hover:text-[var(--foreground)]",
+                        sidebarCollapsed && "justify-center px-2",
+                      )}
+                      title={sidebarCollapsed ? item.label : undefined}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!sidebarCollapsed && (
+                        <span className="flex-1">{item.label}</span>
+                      )}
+                      {!sidebarCollapsed && item.badge && (
+                        <span className="rounded-full bg-[var(--accent)] text-white px-1.5 py-0.5 text-[10px] font-semibold">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+            </div>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="space-y-2 border-t border-gray-200 p-2 dark:border-gray-800">
-        {/* Connection status */}
-        <div
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-3 py-2 text-xs",
-            sidebarCollapsed && "justify-center px-2",
-          )}
-        >
-          {isConnected ? (
-            <Wifi className="h-4 w-4 text-green-500 shrink-0" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-500 shrink-0" />
-          )}
-          {!sidebarCollapsed && (
-            <span className={cn("text-xs", isConnected ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>
-              {isConnected ? "Connected" : "Disconnected"}
-            </span>
-          )}
-        </div>
-
-        {/* Collapse toggle */}
-        <button
-          onClick={toggleSidebar}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-        >
-          {sidebarCollapsed ? (
-            <ChevronRight className="h-4 w-4 mx-auto" />
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
+      <div className="border-t border-[var(--border)] p-3 space-y-2">
+        {!sidebarCollapsed && (
+          <>
+            <Link
+              href="#"
+              className="flex items-center gap-2 px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Tài liệu
+            </Link>
+            <div className="flex items-center justify-between px-2 py-1">
+              <span className="text-[10px] font-mono text-[var(--muted)]">
+                VERSION v2026.5.28
+              </span>
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  isConnected ? "bg-[var(--ok)]" : "bg-[var(--danger)]",
+                )}
+              />
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );
 }
+
+// Need React import for useState
+import React from "react";
