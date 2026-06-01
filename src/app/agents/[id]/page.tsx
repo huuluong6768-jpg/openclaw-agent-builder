@@ -1,362 +1,156 @@
 "use client";
 
-import { useState, use } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Trash2, Share2, Copy, Check, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { useAppStore } from "@/stores/app-store";
+import * as api from "@/lib/api-client";
 
-const tabs = ["Overview", "Knowledge", "Config", "Integration", "Chat"] as const;
-
-type WorkspaceFile = { name: string; content: string };
-
-const mockFiles: WorkspaceFile[] = [
-  { name: "SOUL.md", content: "# Marketing Writer\n\nYou are a professional marketing content writer..." },
-  { name: "AGENTS.md", content: "# Agent Instructions\n\n## Writing Guidelines\n- Be professional yet approachable..." },
-  { name: "MEMORY.md", content: "# Knowledge Base\n\n## Brand Guidelines\n- Innovation, Trust, Quality..." },
-  { name: "USER.md", content: "# User Preferences\n\n## Tone\n- Professional\n- Friendly" },
+const EDITABLE_FILES = [
+  { name: "SOUL.md", label: "SOUL.md (Persona)" },
+  { name: "AGENTS.md", label: "AGENTS.md (Instructions)" },
+  { name: "MEMORY.md", label: "MEMORY.md (Knowledge)" },
 ];
 
-const thinkingLevels = ["off", "minimal", "low", "medium", "high", "max"];
+export default function AgentDetailPage() {
+  const params = useParams();
+  const agentId = params.id as string;
+  const { agents } = useAppStore();
 
-export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
-  const [name, setName] = useState("Marketing Writer");
-  const [emoji, setEmoji] = useState("✍️");
-  const [primaryModel, setPrimaryModel] = useState("anthropic/claude-sonnet-4-20250514");
-  const [fallbacks, setFallbacks] = useState(["openai/gpt-5.5"]);
-  const [thinking, setThinking] = useState("medium");
-  const [editingFile, setEditingFile] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState("");
+  const [activeFile, setActiveFile] = useState("SOUL.md");
+  const [fileContent, setFileContent] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-4">
-        <Link href="/agents">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{emoji}</span>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{name}</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Agent ID: {id}</p>
-          </div>
-        </div>
-      </div>
+  const agent = agents.find((a) => a.id === agentId);
 
-      {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              "rounded-md px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
-              activeTab === tab
-                ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
-                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-            )}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+  useEffect(() => {
+    const loadFiles = async () => {
+      setLoading(true);
+      const contents: Record<string, string> = {};
+      for (const file of EDITABLE_FILES) {
+        try {
+          const result = await api.getAgentFile(agentId, file.name);
+          contents[file.name] = result.content || "";
+        } catch {
+          contents[file.name] = "";
+        }
+      }
+      setFileContent(contents);
+      setLoading(false);
+    };
+    loadFiles();
+  }, [agentId]);
 
-      {/* Tab Content */}
-      {activeTab === "Overview" && (
-        <div className="space-y-6">
-          {/* Identity */}
-          <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Identity
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Emoji</label>
-                <Input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-20" />
-              </div>
-            </div>
-          </section>
-
-          {/* Model Configuration */}
-          <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Model Configuration
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Primary Model</label>
-                <select
-                  value={primaryModel}
-                  onChange={(e) => setPrimaryModel(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                >
-                  <optgroup label="Anthropic">
-                    <option value="anthropic/claude-opus-4-20250514">anthropic/claude-opus-4-20250514</option>
-                    <option value="anthropic/claude-sonnet-4-20250514">anthropic/claude-sonnet-4-20250514</option>
-                  </optgroup>
-                  <optgroup label="OpenAI">
-                    <option value="openai/gpt-5.5">openai/gpt-5.5</option>
-                    <option value="openai/gpt-4.1">openai/gpt-4.1</option>
-                  </optgroup>
-                  <optgroup label="Google">
-                    <option value="google/gemini-2.5-pro">google/gemini-2.5-pro</option>
-                  </optgroup>
-                </select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Context: 200K tokens | Reasoning: Yes
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Fallback Models
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {fallbacks.map((f, i) => (
-                    <Badge key={f} variant="secondary" className="gap-1">
-                      {i + 1}. {f}
-                      <button
-                        onClick={() => setFallbacks(fallbacks.filter((_, j) => j !== i))}
-                        className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                  <Button variant="outline" size="sm" className="text-xs">
-                    + Add
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Thinking & Behavior */}
-          <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Thinking & Behavior
-            </h3>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Thinking Level</label>
-              <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-900">
-                {thinkingLevels.map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setThinking(level)}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
-                      thinking === level
-                        ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white"
-                        : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-                    )}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Workspace Files */}
-          <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Workspace Files
-            </h3>
-            <div className="space-y-2">
-              {mockFiles.map((file) => (
-                <div
-                  key={file.name}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-700"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">📄</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{file.name}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => {
-                        setEditingFile(file.name);
-                        setFileContent(file.content);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      Preview
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* File Editor Modal */}
-          {editingFile && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="mx-4 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{editingFile}</h3>
-                  <Button variant="ghost" size="sm" onClick={() => setEditingFile(null)}>
-                    Close
-                  </Button>
-                </div>
-                <Textarea
-                  value={fileContent}
-                  onChange={(e) => setFileContent(e.target.value)}
-                  className="min-h-[300px] font-mono text-sm"
-                />
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setEditingFile(null)}>Cancel</Button>
-                  <Button onClick={() => setEditingFile(null)}>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Footer Actions */}
-          <div className="flex justify-between">
-            <Button variant="destructive" className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              Delete Agent
-            </Button>
-            <Button className="gap-2">
-              <Save className="h-4 w-4" />
-              Save Changes
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "Knowledge" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Go to the <Link href={`/knowledge?agent=${id}`} className="text-blue-600 hover:underline dark:text-blue-400">Knowledge page</Link> to inject knowledge for this agent.
-          </p>
-        </div>
-      )}
-
-      {activeTab === "Config" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            Raw Configuration
-          </h3>
-          <pre className="rounded-lg bg-gray-50 p-4 text-xs font-mono text-gray-700 overflow-auto dark:bg-gray-900 dark:text-gray-300">
-{JSON.stringify({
-  name,
-  emoji,
-  model: { primary: primaryModel, fallbacks },
-  thinkingDefault: thinking,
-  workspace: "~/.openclaw/workspace",
-}, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {activeTab === "Integration" && (
-        <IntegrationTab agentId={id} agentName={name} />
-      )}
-
-      {activeTab === "Chat" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Chat sessions for this agent will be shown here.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function IntegrationTab({ agentId, agentName }: { agentId: string; agentName: string }) {
-  const [copied, setCopied] = useState<string | null>(null);
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-  const shareLink = `${baseUrl}/chat/${agentId}`;
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveStatus(null);
+    try {
+      await api.setAgentFile(agentId, activeFile, fileContent[activeFile] || "");
+      setSaveStatus("Đã lưu!");
+      setTimeout(() => setSaveStatus(null), 2000);
+    } catch {
+      setSaveStatus("Lỗi khi lưu");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const embedCode = `<script>\n  window.OpenClawEmbed = {\n    agentId: "${agentId}",\n    baseUrl: "${baseUrl}",\n    position: "bottom-right",\n    theme: "light"\n  };\n</script>\n<script src="${baseUrl}/embed.js" defer></script>`;
-
   return (
-    <div className="space-y-6">
-      {/* Share Link */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-          <Share2 className="h-4 w-4 text-blue-500" />
-          Share Link
-        </h3>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-          Share this URL to let anyone chat with {agentName}
-        </p>
-        <div className="flex gap-2">
-          <Input value={shareLink} readOnly className="font-mono text-xs" />
-          <Button variant="outline" size="sm" onClick={() => copyToClipboard(shareLink, "share")}>
-            {copied === "share" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-          </Button>
-          <a href={shareLink} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm"><ExternalLink className="h-4 w-4" /></Button>
-          </a>
-        </div>
-      </section>
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-4 border-b border-[var(--border)] px-6 py-4">
+        <Link
+          href="/agents"
+          className="p-1.5 rounded-[var(--radius-sm)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--bg-accent)]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
 
-      {/* Embed Widget */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Embed Widget</h3>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-          Add a chat widget to any website
-        </p>
-        <div className="relative">
-          <pre className="rounded-lg bg-gray-900 p-4 text-xs font-mono text-gray-300 overflow-x-auto">{embedCode}</pre>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="absolute top-2 right-2"
-            onClick={() => copyToClipboard(embedCode, "embed")}
+        <div className="flex items-center gap-3 flex-1">
+          <span className="text-2xl">{agent?.identity?.emoji || agent?.emoji || "🤖"}</span>
+          <div>
+            <h1 className="text-lg font-bold text-[var(--text-strong)]">
+              {agent?.identity?.name || agent?.name || agentId}
+            </h1>
+            <p className="text-xs text-[var(--muted)] font-mono">
+              {agent?.model?.primary || "—"} · ID: {agentId.slice(0, 12)}
+            </p>
+          </div>
+        </div>
+
+        {/* Save button */}
+        <div className="flex items-center gap-2">
+          {saveStatus && (
+            <span className="text-xs text-[var(--ok)]">{saveStatus}</span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white px-3 py-1.5 text-sm font-medium hover:bg-[var(--accent-hover)] disabled:opacity-50 cursor-pointer"
           >
-            {copied === "embed" ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-          </Button>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Lưu
+          </button>
         </div>
-      </section>
+      </div>
 
-      {/* API Example */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">API Access</h3>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-          Send messages to this agent via API
-        </p>
-        <pre className="rounded-lg bg-gray-900 p-4 text-xs font-mono text-green-400 overflow-x-auto">
-{`curl -X POST ${baseUrl}/api/chat \\
-  -H "Content-Type: application/json" \\
-  -d '{"messages": [{"role": "user", "content": "Hello!"}], "agentId": "${agentId}"}'`}
-        </pre>
-      </section>
+      {/* Content */}
+      <div className="flex flex-1 min-h-0">
+        {/* File Tabs */}
+        <div className="w-48 border-r border-[var(--border)] bg-[var(--background)] p-3 space-y-1">
+          {EDITABLE_FILES.map((file) => (
+            <button
+              key={file.name}
+              onClick={() => setActiveFile(file.name)}
+              className={`w-full text-left rounded-[var(--radius-sm)] px-3 py-2 text-sm cursor-pointer ${
+                activeFile === file.name
+                  ? "bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--bg-accent)]"
+              }`}
+            >
+              {file.label}
+            </button>
+          ))}
 
-      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
-        <p className="text-sm text-blue-800 dark:text-blue-300">
-          For full integration options, visit the{" "}
-          <a href="/integrations" className="font-medium underline">Integrations page</a>.
-        </p>
+          {/* Agent Info */}
+          <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Skills</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {(agent?.skills || []).map((s) => (
+                  <span key={s} className="rounded-full bg-[var(--bg-accent)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
+                    {s}
+                  </span>
+                ))}
+                {(!agent?.skills || agent.skills.length === 0) && (
+                  <span className="text-[10px] text-[var(--muted)]">—</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Editor */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-6 w-6 text-[var(--muted)] animate-spin" />
+            </div>
+          ) : (
+            <textarea
+              value={fileContent[activeFile] || ""}
+              onChange={(e) =>
+                setFileContent((prev) => ({ ...prev, [activeFile]: e.target.value }))
+              }
+              className="flex-1 w-full resize-none bg-[var(--card)] text-sm text-[var(--foreground)] font-mono p-4 focus:outline-none leading-relaxed"
+              placeholder={`Nhập nội dung ${activeFile}...`}
+              spellCheck={false}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

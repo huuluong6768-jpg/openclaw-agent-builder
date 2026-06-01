@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, use } from "react";
-import { Bot, Send, Paperclip } from "lucide-react";
+import { Bot, Send } from "lucide-react";
 
 type Message = {
   id: string;
